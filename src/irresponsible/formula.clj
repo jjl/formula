@@ -18,7 +18,11 @@
 (s/def ::unform fn?)
 (s/def ::gen fn?)
 
-(s/def ::field-map (s/and (s/map-of any? s/spec?) (complement record?)))
+(defn truly
+  "Can't use any? as it's 1.9 only"
+  [_] true)
+
+(s/def ::field-map (s/and (s/map-of truly s/spec?) (complement record?)))
 
 (s/def ::to-field-map
   (s/or :nskw ::nskw
