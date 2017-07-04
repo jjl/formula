@@ -23,8 +23,8 @@
   (t/is (= 123 ((c/keep-conformer identity) 123))))
 
 (t/deftest pred-conformer-test
-  (let [t1 (c/pred-conformer int?)
-        t2 (c/pred-conformer int? #(* 2 %))]
+  (let [t1 (c/pred-conformer integer?)
+        t2 (c/pred-conformer integer? #(* 2 %))]
     (doseq [i ["" [] {} () :a 'a 1.23]]
       (t/is (c/invalid? (t1 i))))
     (t/is (= 2 (t1 2)))
