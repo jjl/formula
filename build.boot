@@ -35,6 +35,12 @@
         :url "https://github.com/irresponsible/formula"
         :scm {:url "https://github.com/irresponsible/formula"}
         :license {"MIT" "https://en.wikipedia.org/MIT_License"}}
+  push {:tag true
+        :ensure-branch "master"
+        :ensure-release true
+        :ensure-clean true
+        :gpg-sign true
+        :repo "clojars"}
   target {:dir #{"target"}})
 
 (deftask testing []
