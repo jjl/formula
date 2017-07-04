@@ -37,6 +37,3 @@
    
 (deftask test []
   (comp (testing) (t/test)))
-
-(deftask deps []
-  identity)
