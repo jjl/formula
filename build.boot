@@ -1,3 +1,4 @@
+; vim: syntax=clojure
 (set-env!
   :project 'irresponsible/formula
   :version "0.1.0"
