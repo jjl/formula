@@ -1,11 +1,17 @@
 ; vim: syntax=clojure
+(set-env! :dependencies (cond
+  (= "1.8.0" (System/getenv "BOOT_CLOJURE_VERSION"))
+    '[[org.clojure/clojure "1.8.0" :scope "provided"]
+      [clojure-future-spec "1.9.0-alpha17"]]
+  :else
+    '[[org.clojure/clojure "1.9.0-alpha17" :scope "provided"]]))
+
 (set-env!
   :project 'irresponsible/formula
   :version "0.1.0"
   :resource-paths #{"src"}
   :source-paths #{"src"}
-  :dependencies '[[org.clojure/clojure "1.9.0-alpha17"]
-                  [org.clojure/core.match "0.3.0-alpha4"]
+  :dependencies #(into % '[[org.clojure/core.match "0.3.0-alpha4"]
                   [irresponsible/spectra "0.1.0"]
                   [org.flatland/ordered "1.5.4"]
                   [com.rpl/specter "1.0.2"]
@@ -19,7 +25,7 @@
                   ;; [adzerk/boot-cljs-repl     "0.3.3"  :scope "test"]
                   ;; [powerlaces/boot-figreload "0.1.0-SNAPSHOT" :scope "test"]
                   ;; [adzerk/boot-cljs          "2.0.0-SNAPSHOT" :scope "test"]
-                  ])
+                  ]))
 
 (require '[adzerk.boot-test :as t])
 ;;          '[adzerk.boot-cljs :refer [cljs]]
