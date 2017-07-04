@@ -9,7 +9,7 @@
 (set-env!
   :project 'irresponsible/formula
   :version "0.1.0"
-  :resource-paths #{"src"}
+  :resource-paths #{"src" "resources"}
   :source-paths #{"src"}
   :dependencies #(into % '[[org.clojure/core.match "0.3.0-alpha4"]
                   [irresponsible/spectra "0.1.0"]
