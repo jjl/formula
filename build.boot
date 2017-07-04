@@ -29,7 +29,13 @@
 
 (task-options!
 ; repl {:port 7001 :middleware '[dirac.nrepl/middleware]}
- target {:dir #{"target"}})
+  pom  {:project (get-env :project)
+        :version (get-env :version)
+        :description "Webforms, done with spec"
+        :url "https://github.com/irresponsible/formula"
+        :scm {:url "https://github.com/irresponsible/formula"}
+        :license {"MIT" "https://en.wikipedia.org/MIT_License"}}
+  target {:dir #{"target"}})
 
 (deftask testing []
   (set-env! :source-paths  #(conj % "test")
