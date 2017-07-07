@@ -2,56 +2,57 @@
   (:require [clojure.spec.alpha :as s]
             [clojure.core.match :refer [match]]
             [irresponsible.spectra :as ss]
-            [irresponsible.formula.conform :as c]
-            [com.rpl.specter :as sp]
-            [com.rpl.specter.impl :as spi]
-            [flatland.ordered.map :refer [ordered-map]]))
+            [irresponsible.formula.conform :as c]))
 
 ;; TODO: move these into spectra?
 (def invalid? c/invalid?)
+(def valid? (complement invalid?))
+
+(defn get-spec! [s]
+  (or (cond (s/spec? s) s
+            (s/valid? ::nskw s) (s/get-spec s))
+      ::s/invalid))
 
 (s/def ::nskw (s/and keyword? namespace))
-(s/def ::spec (s/or :nskw ::nskw :spec s/spec?))
+(s/def ::spec (s/conformer get-spec!))
+(s/def ::specs (s/coll-of ::spec))
+(s/def ::specs+ (s/coll-of ::spec :min-count 1))
 (s/def ::copy ::nskw)
 (s/def ::error some?)
-(s/def ::conform fn?)
-(s/def ::unform fn?)
-(s/def ::gen fn?)
+(s/def ::conform ifn?)
+(s/def ::unform ifn?)
+(s/def ::gen ifn?)
+(s/def ::key (complement nil?))
 
 (defn truly
   "Can't use any? as it's 1.9 only"
   [_] true)
 
-(s/def ::field-map (s/and (s/map-of truly s/spec?) (complement record?)))
+(def nnil?
+  "Can't use some? as it's 1.9 only"
+  (complement nil?))
 
-(s/def ::to-field-map
-  (s/or :nskw ::nskw
-        :map  ::field-map))
-
-(defn field-map [i]
-  (match (ss/conform! ::to-field-map i)
-    [:nskw n] (if-let [s (s/get-spec i)]
-                       {i s}
-                       (throw (ex-info (str "Could not find spec " i) {:got i})))
-    [:map m]  m))
-
-(defrecord Field [field conform unform gen error raw-opts]
+(defrecord Field [field key conform unform gen error raw-opts]
   s/Specize
   (specize* [f] f)
   (specize* [f _] f)
   s/Spec
-  (conform*  [f form] (conform (form field)))
-  (unform*   [f form] {field (unform (form field))})
+  (conform*  [f form]
+    (let [r (conform (form field))]
+      (if (invalid? r)
+        ::s/invalid
+        {key r})))
+  (unform*   [f form] {field (unform (form key))})
   (with-gen* [f gfn]  (assoc f :gen gfn))
   (describe* [f]      `(field ~field ~@raw-opts))
   (gen*      [f overrides path rmap] gen)
   (explain*  [f path via in x]
-    (when (= ::s/invalid (s/conform f x))
+    (when (c/invalid? (s/conform f x))
       [{:path (conj path field) :val (x field) :in in :error error}])))
 
 (s/def ::field-opts
   (s/conformer
-   (s/keys* :req-un [(or ::error ::copy)] :opt-un [::conform ::unform ::gen])
+   (s/keys* :req-un [(or ::error ::copy)] :opt-un [::conform ::unform ::gen ::key])
    (fn [{:keys [copy] :as opts}]
      (if copy
        (if-let [parent (s/get-spec copy)]
@@ -65,10 +66,10 @@
   [field opts raw-opts]
 ;; TODO: alpha18
   (let [all-fields (some-fn :error :copy)
-        {:keys [conform unform gen error]
-         :or {conform identity unform identity}}
+        {:keys [conform unform gen error key]
+         :or {conform identity unform identity key field}}
         (ss/conform! (s/and ::field-opts all-fields) opts)]
-    (->Field field conform unform gen error raw-opts)))
+    (->Field field key conform unform gen error raw-opts)))
 
 (defmacro field [field & opts]
   `(field-impl ~field [~@opts] '~opts))
@@ -79,31 +80,21 @@
   (specize* [f _] f)
   s/Spec
   (conform* [f form]
-    (let [r (sp/transform [sp/MAP-VALS] #(s/conform % form) fields)]
-      (if (not= ::spi/NONE (sp/select-any [sp/MAP-VALS invalid?] r))
+    (let [rs (map #(s/conform % form) fields)]
+      (if (some invalid? rs)
         ::s/invalid
-        r)))
+        (apply merge rs))))
   (unform* [f form]
-    (apply merge (map #(s/unform* % form) (sp/select [sp/MAP-VALS] fields))))
+    (apply merge (map #(s/unform* % form) fields)))
   (explain* [f path via in x]
     (when (= ::s/invalid (s/conform f x))
       (mapcat #(s/explain* % path via in x) fields)))
-  (gen* [f overrides path rmap]   gen)
+  (gen* [f overrides path rmap] gen)
   (with-gen* [f gfn] (assoc f :gen gfn))
   (describe* [f]   `(and ~@raw-opts)))
 
-(let [form {:foo :foo :bar :bar}
-      fields {:foo (field :foo :error "oops"
-                          :conform (c/pred-conformer #(= :foo %)))
-              :bar (field :bar :error "oops"
-                          :conform  (c/pred-conformer #(= :bar %)))}]
-  (sp/transform [sp/MAP-VALS] #(s/conform % form) fields))
-
-
 (defn and-impl [fields raw-opts]
-  (if (seq fields)
-    (->And (apply merge (map field-map fields)) nil raw-opts)
-    (throw (ex-info "and requires at least one field" {}))))
+  (->And (ss/conform! ::specs+ fields) nil raw-opts))
 
 (defrecord Or [fields gen raw-opts]
   s/Specize
@@ -111,15 +102,13 @@
   (specize* [f _] f)
   s/Spec
   (conform* [f form]
-    (-> (fn [[k v]]
-          (let [r (s/conform v form)]
-            (when (not= ::s/invalid r)
-              {k r})))
+    (-> #(let [r (s/conform % form)]
+            (when-not (c/invalid? r)
+              r))
         (some fields)
         (or ::s/invalid)))
   (unform* [f form]
-    (some (fn [[k v]]
-            (s/unform* v form))))
+    (some #(s/unform* % form) fields))
   (explain* [f path via in x]
     (when (= ::s/invalid (s/conform f x))
       (mapcat #(s/explain* % path via in x) fields)))
@@ -129,30 +118,25 @@
 
 (defn or-impl [fields raw-opts]
   (if (seq fields)
-    (let [r (->Or (reduce into (ordered-map) (map field-map fields)) nil raw-opts)]
+    (let [r (->Or (ss/conform! ::specs+ fields) nil raw-opts)]
       r)
     (throw (ex-info "or requires at least one field" {}))))
 
-(defrecord Compound [fields conform unform gen error raw-opts]
+(defrecord Compound [fields key conform unform gen error raw-opts]
   s/Specize
   (specize* [f] f)
   (specize* [f _] f)
   s/Spec
   (conform* [f form]
-    (let [r (-> (fn [acc k v]
-                  (let [r (s/conform v form)]
-                    (if (invalid? r)
-                      (reduced ::s/invalid)
-                      (assoc! acc k r))))
-                (reduce-kv (transient {}) fields))]
-      (if (invalid? r)
+    (let [rs (mapv #(s/conform % form) fields)]
+      (if (some invalid? rs)
         ::s/invalid
-        (conform (persistent! r)))))
+        (let [r (conform (apply merge rs))]
+          (if (invalid? r)
+            ::s/invalid
+            {key r})))))
   (unform* [f form]
-    (reduce-kv (fn [acc k v]
-                 (merge acc (s/unform* v form)))
-               {}
-               fields))
+    (unform (apply merge (map #(s/unform* % form) fields))))
   (explain* [f path via in x]
     (when (= ::s/invalid (s/conform f x))
       (mapcat #(s/explain* % path via in x) fields)))
@@ -160,17 +144,19 @@
   (with-gen* [f gfn] (assoc f :gen gfn))
   (describe* [f]     `(compound ~@raw-opts)))
 
+(s/def ::fields ::specs+)
+
 (s/def ::compound-opts
-  (s/keys* :req-un [::fields ::error] :opt-un [::conform ::unform ::gen]))
+  (s/keys* :req-un [::fields ::error ::key] :opt-un [::conform ::unform ::gen]))
 
 (defn compound-impl
   [opts raw-opts]
 ;; TODO: alpha18
   (let [all-fields (every-pred :conform :unform :error :fields)
-        {:keys [conform unform gen error fields]
+        {:keys [conform unform gen error fields key]
          :or {}}
         (ss/conform! (s/and ::compound-opts all-fields) opts)]
-    (->Compound (apply merge (map field-map fields)) conform unform gen error raw-opts)))
+    (->Compound fields key conform unform gen error raw-opts)))
 
   ;; (explain* [f path via in x]
   ;;   (mapcat #(explain* % (conj path %) via in (form field))))
@@ -193,14 +179,15 @@
   (specize* [f _] f)
   s/Spec
   (conform* [f form]
-    (let [req2 (sp/transform [sp/MAP-VALS] #(s/conform % form) req)]
-      (if (not= ::spi/NONE (sp/select-any [sp/MAP-VALS invalid?] req2))
+    (let [req2 (mapv #(s/conform % form) req)
+          opt2 (into [] (comp (map #(s/conform % form))
+                              (filter valid?)) opt)]
+      (if (some invalid? req2)
         ::s/invalid
-        (let [opt2 (sp/transform [sp/MAP-VALS] #(s/conform % form) opt)]
-          (conform (merge opt2 req2))))))
+        (conform (apply merge (apply merge req2) opt2)))))
   (unform* [f form]
-    (let [req2 (map #(unform (form %)) (vals req))
-          opt2 (map #(unform (form %)) (vals opt))]
+    (let [req2 (map #(unform (form %)) req)
+          opt2 (map #(unform (form %)) opt)]
       (merge (apply merge opt2) (apply merge req2))))
   (explain* [f path via in x]
     (when (= ::s/invalid (s/conform* f x))
@@ -209,16 +196,10 @@
   (with-gen* [f gfn] (assoc f :gen gfn))
   (describe* [f]     `(formula ~@raw-opts)))
 
-(s/def ::form-field
-  (s/or :nskw ::nskw
-        :map (s/map-of ::nskw s/spec? :min-count 1)))
+(s/def ::req ::specs)
+(s/def ::opt ::specs)
 
-(s/def ::form-fields (s/coll-of ::form-field))
-
-(s/def :irresponsible.formula.form/req ::form-fields)
-(s/def :irresponsible.formula.form/opt ::form-fields)
-
-(s/def ::form-opts (s/keys* :req-un [(or :irresponsible.formula.form/req :irresponsible.formula.form/opt)] :opt-un [:irresponsible.formula.form/req :irresponsible.formula.form/opt ::conform ::unform ::gen ::error]))
+(s/def ::form-opts (s/keys* :req-un [(or ::req ::opt)] :opt-un [::req ::opt ::conform ::unform ::gen ::error]))
 
 (defn form-impl
   [opts raw-opts]
@@ -226,10 +207,8 @@
   (let [all-fields (every-pred :error (some-fn (comp seq :req) (comp seq :opt)))
         {:keys [req opt conform unform gen error]
          :or {conform identity unform identity}}
-        (ss/conform! (s/and ::form-opts all-fields) opts)
-        req2 (reduce into (ordered-map) (map field-map (s/unform ::form-fields req)))
-        opt2 (reduce into (ordered-map) (map field-map (s/unform ::form-fields opt)))]
-    (->Form conform unform gen req2 opt2 error raw-opts)))
+        (ss/conform! (s/and ::form-opts all-fields) opts)]
+    (->Form conform unform gen req opt error raw-opts)))
 
 (defmacro form [& opts]
   `(form-impl [~@opts] '~opts))

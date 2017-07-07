@@ -13,8 +13,6 @@
   :source-paths #{"src"}
   :dependencies #(into % '[[org.clojure/core.match "0.3.0-alpha4"]
                   [irresponsible/spectra "0.1.0"]
-                  [org.flatland/ordered "1.5.4"]
-                  [com.rpl/specter "1.0.2"]
                   [adzerk/boot-test          "1.2.0"  :scope "test"]
                   ;; [criterium                 "0.4.4"  :scope "test"]
                   ;; [binaryage/devtools        "0.8.2"  :scope "test"]

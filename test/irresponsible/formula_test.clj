@@ -5,8 +5,8 @@
             [irresponsible.formula.conform :as c]
             [irresponsible.spectra :as ss]))
 
-(s/def ::foo (f/field :foo :conform (c/pred-conformer #{:foo}) :error "ugh"))
-(s/def ::bar (f/field :bar :conform (c/pred-conformer #{:bar}) :error "eek"))
+(s/def ::foo (f/field :foo :key :foofoo :conform (c/pred-conformer #{:foo}) :error "ugh"))
+(s/def ::bar (f/field :bar :key :barbar :conform (c/pred-conformer #{:bar}) :error "eek"))
 
 (t/deftest invalid?-test
   (t/is (f/invalid? ::s/invalid))
@@ -36,10 +36,10 @@
     (t/is (f/invalid? (t1 "abc")))
     (t/is (f/invalid? (t1 "09")))))
 
-(t/deftest field-map-test
-  (let [f1 (f/field "foo" :error "bar")]
-    (t/is (= {:foo f1} (f/field-map {:foo f1})))
-    (t/is (= {::foo (s/get-spec ::foo)} (f/field-map ::foo)))))
+;; (t/deftest field-map-test
+;;   (let [f1 (f/field "foo" :error "bar")]
+;;     (t/is (= {:foo f1} (f/field-map {:foo f1})))
+;;     (t/is (= {::foo (s/get-spec ::foo)} (f/field-map ::foo)))))
 
 (t/deftest field-test
   (t/testing :mandatory ;; todo: more
@@ -49,17 +49,20 @@
   (let [t1 (f/field "foo" :error "oops")
         t2 (f/field "foo" :error "oops" :conform #(* 2 %))
         t3 (f/field "foo" :error "oops" :unform #(* 2 %))
-        t4 (f/field "foo" :error "oops" :conform #(* 2 %) :unform #(* 2 %))]
+        t4 (f/field "foo" :error "oops" :conform #(* 2 %) :unform #(* 2 %))
+        t5 (f/field "foo" :error "oops" :key "bar")]
     (t/testing :conform
-      (t/is (= 1 (s/conform t1 {"foo" 1})))
-      (t/is (= 2 (s/conform t2 {"foo" 1})))
-      (t/is (= 1 (s/conform t3 {"foo" 1})))
-      (t/is (= 2 (s/conform t4 {"foo" 1}))))
+      (t/is (= {"foo" 1} (s/conform t1 {"foo" 1})))
+      (t/is (= {"foo" 2} (s/conform t2 {"foo" 1})))
+      (t/is (= {"foo" 1} (s/conform t3 {"foo" 1})))
+      (t/is (= {"foo" 2} (s/conform t4 {"foo" 1})))
+      (t/is (= {"bar" 1} (s/conform t5 {"foo" 1}))))
     (t/testing :unform
       (t/is (= {"foo" 1} (s/unform t1 {"foo" 1})))
       (t/is (= {"foo" 1} (s/unform t2 {"foo" 1})))
       (t/is (= {"foo" 2} (s/unform t3 {"foo" 1})))
-      (t/is (= {"foo" 2} (s/unform t4 {"foo" 1}))))
+      (t/is (= {"foo" 2} (s/unform t4 {"foo" 1})))
+      (t/is (= {"foo" 1} (s/unform t5 {"bar" 1}))))
     (t/testing :describe
       (t/is (= '(field "foo" :error "oops") (s/describe t1)))))
   (t/testing :explain
@@ -77,29 +80,24 @@
     (t/is (= ::sentinel
              (try (f/and)
                   (catch Throwable e ::sentinel)))))
-  (let [f1 (f/field "bar" :error "oops"
-             :conform (c/pred-conformer #(= :bar %)))
-        f2 (f/field "baz" :error "oops"
-             :conform  (c/pred-conformer #(= :baz %)))
-        t1 (f/and {:foo f1})
-        t2 (f/and {:foo f1 :bar f2})
-        t3 (f/and ::foo)
-        t4 (f/and ::foo ::bar)]
+  (let [f1 (f/field "baz" :error "oops"
+             :conform (c/pred-conformer #(= :baz %)))
+        f2 (f/field "quux" :error "oops"
+             :conform  (c/pred-conformer #(= :quux %)))
+        t1 (f/and ::foo)
+        t2 (f/and ::foo f1 f2)]
     (t/testing :conform
-      (t/is (c/invalid? (s/conform t1 {"bar" :foo})))
       (t/is (c/invalid? (s/conform t1 {})))
-      (t/is (= {:foo :bar} (s/conform t1 {"bar" :bar})))
-      (t/is (c/invalid? (s/conform t2 {"bar" :bar})))
-      (t/is (c/invalid? (s/conform t2 {"baz" :baz})))
+      (t/is (c/invalid? (s/conform t1 {:foo :baz})))
+      (t/is (= {:foofoo :foo} (s/conform t1 {:foo :foo})))
       (t/is (c/invalid? (s/conform t2 {})))
-      (t/is (= {:foo :bar :bar :baz} (s/conform t2 {"bar" :bar "baz" :baz})))
-      (t/is (c/invalid? (s/conform t3 {})))
-      (t/is (c/invalid? (s/conform t3 {:foo :bar})))
-      (t/is (= {::foo :foo} (s/conform t3 {:foo :foo})))
-      (t/is (c/invalid? (s/conform t4 {})))
-      (t/is (c/invalid? (s/conform t4 {:foo :foo})))
-      (t/is (c/invalid? (s/conform t4 {:bar :bar})))
-      (t/is (= {::foo :foo ::bar :bar} (s/conform t4 {:foo :foo :bar :bar})))
+      (t/is (c/invalid? (s/conform t2 {:foo :foo})))
+      (t/is (c/invalid? (s/conform t2 {"baz" :baz})))
+      (t/is (c/invalid? (s/conform t2 {"quux" :quux})))
+      (t/is (c/invalid? (s/conform t2 {:foo :foo "baz" :baz})))
+      (t/is (c/invalid? (s/conform t2 {:foo :foo "quux" :quux})))
+      (t/is (c/invalid? (s/conform t2 {"baz" :baz "quux" :quux})))
+      (t/is (= {:foofoo :foo "baz" :baz "quux" :quux} (s/conform t2 {:foo :foo "baz" :baz "quux" :quux})))
       )
     (t/testing :unform)
     (t/testing :explain)
@@ -117,25 +115,16 @@
              :conform (c/pred-conformer #(= :bar %)))
         f2 (f/field "baz" :error "oops"
              :conform  (c/pred-conformer #(= :baz %)))
-        t1 (f/or {:foo f1})
-        t2 (f/or {:foo f1 :bar f2})
         t3 (f/or ::foo)
-        t4 (f/or ::foo ::bar)]
+        t4 (f/or ::foo f1 f2)]
     (t/testing :conform
-      (t/is (c/invalid? (s/conform t1 {"bar" :foo})))
-      (t/is (c/invalid? (s/conform t1 {})))
-      (t/is (= {:foo :bar} (s/conform t1 {"bar" :bar})))
-      (t/is (c/invalid? (s/conform t2 {})))
-      (t/is (= {:foo :bar} (s/conform t2 {"bar" :bar})))
-      (t/is (= {:bar :baz} (s/conform t2 {"baz" :baz})))
-      (t/is (= {:foo :bar} (s/conform t2 {"bar" :bar "baz" :baz})))
       (t/is (c/invalid? (s/conform t3 {})))
       (t/is (c/invalid? (s/conform t3 {:foo :bar})))
-      (t/is (= {::foo :foo} (s/conform t3 {:foo :foo})))
+      (t/is (= {:foofoo :foo} (s/conform t3 {:foo :foo})))
       (t/is (c/invalid? (s/conform t4 {})))
-      (t/is (= {::foo :foo} (s/conform t4 {:foo :foo})))
-      (t/is (= {::bar :bar} (s/conform t4 {:bar :bar})))
-      (t/is (= {::foo :foo} (s/conform t4 {:foo :foo :bar :bar})))
+      (t/is (= {:foofoo :foo} (s/conform t4 {:foo :foo})))
+      (t/is (= {"bar" :bar} (s/conform t4 {"bar" :bar})))
+      (t/is (= {"baz" :baz} (s/conform t4 {"baz" :baz})))
       )))
     ;; (t/testing :unform)
     ;; (t/testing :explain)
@@ -153,25 +142,25 @@
              :conform (c/pred-conformer #(= :bar %)))
         f2 (f/field "baz" :error "oops"
              :conform  (c/pred-conformer #(= :baz %)))
-        t1 (f/compound :fields [{:foo f1}] :error "oops" :conform #(assoc % :conformed? true) :unform #(assoc % :unformed? true))
-        t2 (f/compound :fields [{:foo f1 :bar f2}] :error "oops" :conform #(assoc % :conformed? true) :unform #(assoc % :unformed? true))
-        t3 (f/compound :fields [::foo] :error "oops" :conform #(assoc % :conformed? true) :unform #(assoc % :unformed? true))
-        t4 (f/compound :fields [::foo ::bar] :error "oops" :conform #(assoc % :conformed? true) :unform #(assoc % :unformed? true))]
+        t1 (f/compound :fields [f1] :error "oops" :conform #(% "bar") :unform #(assoc % :unformed? true) :key :quux)
+        t2 (f/compound :fields [f1 f2] :error "oops" :conform (juxt #(% "bar") #(% "baz")) :unform (juxt #(% "bar") #(% "baz")) :key :quux)
+        t3 (f/compound :fields [::foo] :error "oops" :conform :foofoo :unform :foofoo :key :quux)
+        t4 (f/compound :fields [::foo ::bar] :error "oops" :conform (juxt :foofoo :barbar) :unform (juxt :foofoo :barbar) :key :quux)]
     (t/testing :conform
       (t/is (c/invalid? (s/conform t1 {"bar" :foo})))
       (t/is (c/invalid? (s/conform t1 {})))
-      (t/is (= {:foo :bar :conformed? true} (s/conform t1 {"bar" :bar})))
+      (t/is (= {:quux :bar} (s/conform t1 {"bar" :bar})))
       (t/is (c/invalid? (s/conform t2 {"bar" :bar})))
       (t/is (c/invalid? (s/conform t2 {"baz" :baz})))
       (t/is (c/invalid? (s/conform t2 {})))
-      (t/is (= {:foo :bar :bar :baz :conformed? true} (s/conform t2 {"bar" :bar "baz" :baz})))
+      (t/is (= {:quux [:bar :baz]} (s/conform t2 {"bar" :bar "baz" :baz})))
       (t/is (c/invalid? (s/conform t3 {})))
       (t/is (c/invalid? (s/conform t3 {:foo :bar})))
-      (t/is (= {::foo :foo :conformed? true} (s/conform t3 {:foo :foo})))
+      (t/is (= {:quux :foo} (s/conform t3 {:foo :foo})))
       (t/is (c/invalid? (s/conform t4 {})))
       (t/is (c/invalid? (s/conform t4 {:foo :foo})))
       (t/is (c/invalid? (s/conform t4 {:bar :bar})))
-      (t/is (= {::foo :foo ::bar :bar :conformed? true} (s/conform t4 {:foo :foo :bar :bar})))
+      (t/is (= {:quux [:foo :bar]} (s/conform t4 {:foo :foo :bar :bar})))
       )
     (t/testing :unform)
     (t/testing :explain)
@@ -179,6 +168,7 @@
     (t/testing :gen)
     (t/testing :with-gen)
     ))
+
 
 (t/deftest form-test
   (t/testing :mandatory
@@ -188,13 +178,15 @@
   (let [f1 (f/form :opt [::foo] :conform #(assoc % :conformed? true) :unform #(assoc % :unformed? true) :error "oops")
         f2 (f/form :req [::foo] :conform #(assoc % :conformed? true) :unform #(assoc % :unformed? true) :error "oops")
         f3 (f/form :req [::foo] :opt [::bar] :conform #(assoc % :conformed? true) :unform #(assoc % :unformed? true) :error "oops")]
-    (t/is (= {::foo ::s/invalid :conformed? true} (s/conform f1 {})))
-    (t/is (= {::foo :foo :conformed? true} (s/conform f1 {:foo :foo})))
+    (t/is (= {:conformed? true} (s/conform f1 {})))
+    (t/is (= {:foofoo :foo :conformed? true} (s/conform f1 {:foo :foo})))
     (t/is (c/invalid? (s/conform f2 {})))
     (t/is (c/invalid? (s/conform f2 {:foo :bar})))
-    (t/is (= {::foo :foo :conformed? true} (s/conform f2 {:foo :foo})))
+    (t/is (= {:foofoo :foo :conformed? true} (s/conform f2 {:foo :foo})))
     (t/is (c/invalid? (s/conform f3 {})))
     (t/is (c/invalid? (s/conform f3 {:foo :bar})))
-    (t/is (= {::foo :foo :conformed? true ::bar ::s/invalid} (s/conform f3 {:foo :foo})))
-    (t/is (= {::foo :foo :conformed? true ::bar :bar} (s/conform f3 {:foo :foo :bar :bar})))
+    (t/is (= {:foofoo :foo :conformed? true} (s/conform f3 {:foo :foo})))
+    (t/is (= {:foofoo :foo :conformed? true :barbar :bar} (s/conform f3 {:foo :foo :bar :bar})))
     ))
+
+;; (t/run-tests)

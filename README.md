@@ -62,10 +62,10 @@ here so our param keys are strings, but we also support keyword keys.
 (defn login-post
   "This is a standard ring handler function called in response to a POST request"
   [{:keys [params]}]
-  (if-let [r (read-login-form params)]
+  (if-let [{:strs [username password]} (read-login-form params)]
     (let [errors (f/errors (s/explain-data ::login-form params))]
       (render-template "template.html" {:params params :errors errors}))
-    (if-let [u (lookup-user {:username (::username form) :password (::password form)})]
+    (if-let [u (lookup-user {:username username password})]
       (do-login u)
       (render-template "template.html" {:params params :errors {:form "Your username and/or password were wrong. Please try again"}}))))
 ```
