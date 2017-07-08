@@ -204,7 +204,7 @@
 (defn form-impl
   [opts raw-opts]
 ;; TODO: alpha18
-  (let [all-fields (every-pred :error (some-fn (comp seq :req) (comp seq :opt)))
+  (let [all-fields (every-pred (some-fn (comp seq :req) (comp seq :opt)))
         {:keys [req opt conform unform gen error]
          :or {conform identity unform identity}}
         (ss/conform! (s/and ::form-opts all-fields) opts)]
