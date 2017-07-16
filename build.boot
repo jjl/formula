@@ -12,9 +12,12 @@
   :resource-paths #{"src" "resources"}
   :source-paths #{"src"}
   :dependencies #(into % '[[org.clojure/core.match "0.3.0-alpha4"]
+                           [org.clojure/math.numeric-tower "0.0.4"]
                            [irresponsible/spectra "0.1.0"]
+                           [org.flatland/ordered "1.5.5"]
                            [adzerk/boot-test          "1.2.0"  :scope "test"]
                            [commons-validator/commons-validator "1.6"]
+                           [org.clojure/test.check "0.10.0-alpha2"]
                   ;; [criterium                 "0.4.4"  :scope "test"]
                   ;; [binaryage/devtools        "0.8.2"  :scope "test"]
                   ;; [binaryage/dirac           "0.6.6"  :scope "test"]

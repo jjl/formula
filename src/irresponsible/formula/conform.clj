@@ -36,6 +36,12 @@
 (defn min-len [l]
   (pred-conformer (every-pred string? #(>= (count %) l))))
 
+(defn max-len [l]
+  (pred-conformer (every-pred string? #(<= (count %) l))))
+
+(defn between-len [min max]
+  (pred-conformer (every-pred string? #(<= min (count %) max))))
+
 (defn min [i]
   (pred-conformer (every-pred number? #(>= % i))))
 
